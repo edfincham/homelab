@@ -75,75 +75,179 @@ This is just a quality of life option to prevent having to retype passwords when
 After this, you should be able to connect to any Raspberry Pi without entering a password
 
 ### Install K3s
-K3s can be installed via the [k3s-ansible](https://github.com/k3s-io/k3s-ansible/tree/master) setup, which requires Ansible. Assuming you have Python3 installed:
+1. Create a token which is used to add workers to the server:
+   ```shell
+   export K3S_TOKEN=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 20)
+   echo $K3S_TOKEN
+   ```
+2. Connect to the Raspberry Pi which will serve as the master node and execute:
+   ```shell
+   curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --token $K3S_TOKEN --disable metrics-server --disable traefik --write-kubeconfig-mode 644" sh -s -
+   ```
 
+   This command installs K3s with a couple of flags passed. If you're working with an old Raspberry Pi as the single node in your K3s cluster, it can struggle to schedule everything. To alleviate the load, we pass `--diable metrics-server`. For larger clusters, this can and probably should be enabled. The installation ships with `traefik` which provisions a load balancer for cluster access. In this case, we actually want to deploy a reverse proxy behind a custom load balancer, so we can use the `--disable traefik` flag too.
+3. Connect to the Raspberry Pi(s) which will serve as worker or agent node(s) and execute:
+   ```shell
+   curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="agent --server ??? --token $K3S_TOKEN" sh -s -
+   ```
+
+   To retrieve the `K3S_TOKEN`, connect to the server node and run:
+   ```shell
+   sudo cat /var/lib/rancher/k3s/server/node-token
+   ```
+   The `K3S_TOKEN` is the last digits after the `:server:` string
+
+#### Uninstall K3s
+To remove K3s from a server node, SSH to the Raspberry Pi and run:
 ```shell
-python3 -m venv .venv
-source .venv/bin/activate
-pip3 install ansible
+/usr/local/bin/k3s-uninstall.sh
 ```
 
-Now to install K3s:
-1. Clone the [k3s-ansible](https://github.com/k3s-io/k3s-ansible/tree/master)
-2. Create the inventory by copying the example:
-   ```shell
-   cp inventory-sample.yml inventory.yml
-   ```
-3. Edit the `inventory.yml` to match the cluster setup. For instance, if we have the following three Raspberry Pi devices configured:
-   ```shell
-   192.168.1.244
-   192.168.1.245
-   192.168.1.246
-   ```
-
-   We could configure the cluster as follows:
-   ```yml
-    k3s_cluster:
-        children:
-            server:
-                hosts:
-                    192.168.1.244:
-            agent:
-                hosts:
-                    192.168.1.245:
-                    192.168.1.246:
-   ```
-
-   The K3s version can also be configured. Also set the `ansible_user` to the `pi` which was set when imaging the SD card(s):
-   ```shell
-   vars:
-     ansible_user: pi
-     k3s_version: v1.26.9+k3s1
-   ```
-4. Run the Ansible playbook
-   ```shell
-   ansible-playbook playbook/site.yml -i inventory.yml
-   ```
+To remove K3s from a worker/agent node, SSH to the Raspberry Pi and run:
+```shell
+/usr/local/bin/k3s-agent-uninstall.sh
+```
 
 ### Configure Kubectl
 It may take a couple of runs of the playbook for it to successfully install. Once completed, `kubectl` can be configured on the local machine to connect to K3s
 
 1. Transfer the `kubeconfig` from the master node to the local machine
    ```shell
-   scp pi@rpi-1:~/.kube/config ~/.kube/config-rpi-k3s
+   scp pi@rpi-1:/etc/rancher/k3s/k3s.yaml ~/.kube/config-rpi-k3s
    ```
-2. Configure the `KUBECONFIG` environment variable (add to `~/.bashrc`)
+2. In the `config-rpi-k3s` file, replace the value of the server field with the IP or name of your K3s server
+3. Configure the `KUBECONFIG` environment variable (add to `~/.bashrc`)
    ```shell
    export KUBECONFIG="/home/$USER/.kube/config"
    export KUBECONFIG="$KUBECONFIG:/home/$USER/.kube/config-rpi-k3s"
    ```
 
    On my machine, the `KUBECONFIG` requires absolute paths rather than relative
-3. Use `kubectl` to check the available config contexts
+4. Use `kubectl` to check the available config contexts
    ```shell
    kubectl config get-contexts
    ```
 
    Ensure the Raspberry Pi K3s context has a useful name. If not, change it with:
    ```shell
-   kubectl config rename-context $CURRENT_NAME $NEW_NAME
+   kubectl config rename-context default rpi-k3s
    ```
-4. Use a tool like [`kubectx`](https://github.com/ahmetb/kubectx) to readily switch between clusters and view the nodes in the `rpi-k3s` cluster
-   ```shell
-   kubectl get nodes
-   ```
+
+### Deploying a Reverse Proxy
+How do we access the cluster from the home network? Since my crappy Telia router does not support adding a custom DNS server, we can deploy a reverse proxy. The structure is outlined in the graph below.
+
+```mermaid
+graph TD
+  subgraph Proxy Namespace
+    LoadBalancerService((LoadBalancer))
+    NginxPod((Pod))
+    ConfigMap
+  end
+
+  subgraph App #2 Namespace
+    App1Service((Service))
+    App1Pod1((Pod 1))
+    App1Pod2((Pod 2))
+  end
+
+  subgraph App #1 Namespace
+    App2Service((Service))
+    App2Pod1((Pod 1))
+    App2Pod2((Pod 2))
+  end
+
+  LoadBalancerService --> NginxPod
+  NginxPod --> ConfigMap
+
+  NginxPod -->|/app-2| App1Service
+  NginxPod -->|/app-1| App2Service
+
+  App1Service --> App1Pod1
+  App1Service --> App1Pod2
+
+  App2Service --> App2Pod1
+  App2Service --> App2Pod2
+```
+
+In summary, the load balancer passes requests to a `nginx` service which forwards the requests to different services depending on the URL path in the original request.
+
+The reverse proxy is defined in a [Helm](https://helm.sh/) chart in the `helm/charts/reverse-proxy` directory. This chart is essentially a deployable package of Kubernetes resources. Ensure that [Helm is installed](https://helm.sh/docs/intro/install/).
+
+In the `values.yaml` the `nginxConfig` must include any services which the reverse proxy can forward requests to:
+```yaml
+nginxConfig:
+  locations:
+    nginx:
+      path: /test-app
+      service: nginx-service
+      namespace: example
+```
+Each application requires a new entry under `locations`. The `path` field is arbitrary and will be removed when the request is forward to the underlying service, whose name is specified in `service`.
+
+An example of an simple, underlying application for which the chart can act as a reverse-proxy is provided below:
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: example
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: example
+  labels:
+    app: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  namespace: example
+spec:
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP
+```
+
+In this case, any requests to `/test-app` will be forwarded to the `nginx-service`
+
+#### Deployment
+To see the resources which the chart creates:
+```shell
+helm template --debug homelab helm/charts/reverse-proxy
+```
+Or:
+```shell
+helm upgrade --install homelab helm/charts/reverse-proxy --dry-run
+```
+
+To install the chart:
+```shell
+helm upgrade --install homelab helm/charts/reverse-proxy
+```
+
+#### Uninstalling the Chart
+To uninstall the Helm chart and all corresponding resources:
+```shell
+helm uninstall homelab
+```

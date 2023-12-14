@@ -1,0 +1,6 @@
+apiVersion: v2
+name: reverse-proxy
+description: A reverse proxy for homelab K3s
+type: application
+version: 0.1.0
+appVersion: "1.16.0"

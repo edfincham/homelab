@@ -1,0 +1,46 @@
+nginxConfig:
+  locations:
+    nginx:
+      path: /test-app
+      service: nginx-service
+      namespace: example
+
+replicaCount: 1
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+image:
+  repository: nginx
+  pullPolicy: IfNotPresent
+  tag: ""
+
+nameOverride: "proxy"
+fullnameOverride: "proxy"
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: LoadBalancer
+  port: 80
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
