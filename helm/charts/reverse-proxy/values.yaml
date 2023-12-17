@@ -1,9 +1,9 @@
-nginxConfig:
-  locations:
-    nginx:
-      path: /test-app
-      service: nginx-service
-      namespace: example
+# nginxConfig:
+#   locations:
+#     nginx:
+#       path: /test-app
+#       service: nginx-service
+#       namespace: example
 
 replicaCount: 1
 
