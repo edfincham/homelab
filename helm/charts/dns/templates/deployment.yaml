@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "reverse-proxy.fullname" . }}
-  namespace: {{ include "reverse-proxy.fullname" . }}
+  name: {{ include "dns.fullname" . }}
+  namespace: {{ include "dns.fullname" . }}
   labels:
-    {{- include "reverse-proxy.labels" . | nindent 4 }}
+    {{- include "dns.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "reverse-proxy.selectorLabels" . | nindent 6 }}
+      {{- include "dns.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "reverse-proxy.selectorLabels" . | nindent 8 }}
+        {{- include "dns.selectorLabels" . | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "reverse-proxy.serviceAccountName" . }}
+      serviceAccountName: {{ include "dns.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -27,18 +27,12 @@ spec:
           image: {{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: http
-              containerPort: {{ .Values.service.port }}
-              protocol: TCP
+            - containerPort: 53
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          volumeMounts:
-            - name: nginx-config
-              mountPath: /etc/nginx/conf.d
-      volumes:
-        - name: nginx-config
-          configMap:
-            name: nginx-config
+          envFrom:
+          - configMapRef:
+              name: dns-config
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

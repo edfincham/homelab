@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dns-config
+  namespace: {{ include "dns.fullname" . }}
+data:
+  DNS_A: |
+{{- range .Values.dnsRecords }}
+    {{ .address }}={{ .domain }},
+{{- end }}
+  ALLOW_QUERY: any
+  DOCKER_LOGS: "1"
