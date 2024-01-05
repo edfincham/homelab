@@ -1,6 +1,6 @@
 apiVersion: v2
-name: reverse-proxy
-description: A reverse proxy for homelab K3s
+name: dns
+description: A custom DNS server for HomeLab K3s
 type: application
 version: 0.1.0
 appVersion: "1.16.0"

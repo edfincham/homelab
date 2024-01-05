@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dns
+  namespace: dns
+spec:
+  project: default
+  syncPolicy:
+    automated: {}
+  source:
+    repoURL: https://github.com/edfincham/homelab.git
+    path: helm/charts/dns
+    targetRevision: HEAD
+    helm:
+      releaseName: dns
+      valuesObject:
+        nameOverride: "dns"
+        fullnameOverride: "dns"
+        dnsRecords:
+        - domain: 192.168.0.241
+          address: "argocd.home.lab"
+        service:
+          loadBalancerIP: "192.168.0.240"
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: dns

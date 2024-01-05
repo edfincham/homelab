@@ -1,11 +1,8 @@
-# nginxConfig:
-#   locations:
-#     nginx:
-#       path: /test-app
-#       service: nginx-service
-#       namespace: example
+dnsRecords:
+- domain: 192.168.0.0
+  address: "example.home.lab"
 
-replicaCount: 1
+replicaCount: 2
 
 autoscaling:
   enabled: false
@@ -15,12 +12,12 @@ autoscaling:
   # targetMemoryUtilizationPercentage: 80
 
 image:
-  repository: nginx
+  repository: cytopia/bind
   pullPolicy: IfNotPresent
   tag: ""
 
-nameOverride: "proxy"
-fullnameOverride: "proxy"
+nameOverride: "dns"
+fullnameOverride: "dns"
 
 serviceAccount:
   create: true
@@ -35,7 +32,10 @@ securityContext: {}
 
 service:
   type: LoadBalancer
-  port: 80
+  loadBalancerIP: ""
+  annotations:
+    metallb.universe.tf/address-pool: mainpool
+    metallb.universe.tf/allow-shared-ip: "dnskey"
 
 resources: {}
 
