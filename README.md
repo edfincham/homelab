@@ -228,3 +228,6 @@ echo $(kubectl get secret argocd-initial-admin-secret -n argocd -o json | jq -r 
 ```
 
 Once logged in, it's worth updating the password in the "User Info" settings panel.
+
+#### ArgoCD In Action
+

@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: dns
-  namespace: dns
+  namespace: argocd
 spec:
   project: default
   syncPolicy:
@@ -17,10 +17,10 @@ spec:
         nameOverride: "dns"
         fullnameOverride: "dns"
         dnsRecords:
-        - domain: 192.168.0.241
-          address: "argocd.home.lab"
+        - domain: 192.168.0.242
+          address: "argo.home.lab"
         service:
-          loadBalancerIP: "192.168.0.240"
+          loadBalancerIP: 192.168.0.240
   destination:
     server: "https://kubernetes.default.svc"
     namespace: dns
