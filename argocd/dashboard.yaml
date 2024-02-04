@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dashboard
+  namespace: argocd
+spec:
+  project: default
+  syncPolicy:
+    automated: {}
+  source:
+    repoURL: https://github.com/edfincham/homelab.git
+    path: helm/charts/dashboard
+    targetRevision: HEAD
+    helm:
+      releaseName: dashboard
+      valuesObject:
+        dashboardConfig: |
+          pageInfo:
+            title: Home Lab
+          appConfig:
+            theme: callisto
+            layout: auto
+            iconSize: medium
+            language: en
+            disableConfiguration: true
+          sections:
+            - name: GitOps
+              icon: far fa-git
+              items:
+                - title: GitHub
+                  description: HomeLab Source Code
+                  icon: fab fa-github
+                  url: https://github.com/edfincham/homelab
+                - title: ArgoCD
+                  description: GitOps Controller Plane
+                  icon: favicon
+                  url: http://argo.home.lab
+        service:
+          loadBalancerIP: 192.168.0.243
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: dns
