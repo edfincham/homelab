@@ -1,0 +1,41 @@
+dashboardConfig: {}
+
+replicaCount: 1
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+image:
+  repository: lissy93/dashy
+  pullPolicy: IfNotPresent
+  tag: ""
+
+nameOverride: "dashboard"
+fullnameOverride: "dashboard"
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: LoadBalancer
+  loadBalancerIP: "192.168.0.243"
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
