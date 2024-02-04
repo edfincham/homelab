@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-config
+  namespace: {{ include "dashboard.fullname" . }}
+data:
+  conf.yml: |
+    {{- .Values.dashboardConfig | nindent 4 }}
