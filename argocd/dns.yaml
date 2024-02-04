@@ -19,6 +19,8 @@ spec:
         dnsRecords:
         - domain: 192.168.0.242
           address: "argo.home.lab"
+        - domain: 192.168.0.243
+          address: "dashboard.home.lab"
         service:
           loadBalancerIP: 192.168.0.240
   destination:
