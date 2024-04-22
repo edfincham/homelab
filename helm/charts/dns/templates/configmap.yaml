@@ -10,4 +10,4 @@ data:
 {{- end }}
   DNS_FORWARDER: 8.8.8.8
   ALLOW_QUERY: any
-  DOCKER_LOGS: "1"
+  DOCKER_LOGS: "0"
