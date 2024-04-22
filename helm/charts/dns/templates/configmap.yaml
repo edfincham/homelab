@@ -9,4 +9,4 @@ data:
     {{ .address }}={{ .domain }},
 {{- end }}
   ALLOW_QUERY: any
-  DOCKER_LOGS: "0"
+  DOCKER_LOGS: "1"
