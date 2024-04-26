@@ -25,7 +25,7 @@ spec:
         - containerPort: 53
         env:
         - name: DNS_A
-          value: example.home.lab=192.168.0.241
+          value: example.home.lab=192.168.0.242
         - name: ALLOW_QUERY
           value: any
         - name: DOCKER_LOGS
@@ -47,7 +47,7 @@ spec:
       port: 53
       targetPort: 53
   type: LoadBalancer
-  loadBalancerIP: 192.168.0.240
+  loadBalancerIP: 192.168.0.241
 ---
 apiVersion: v1
 kind: Service
@@ -65,4 +65,4 @@ spec:
       port: 53
       targetPort: 53
   type: LoadBalancer
-  loadBalancerIP: 192.168.0.240
+  loadBalancerIP: 192.168.0.241

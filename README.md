@@ -45,7 +45,7 @@ To set the static addresses:
    ssh pi@192.168.0.240
    ```
 7. If this does not work, assign a static lease via the network router's admin console. Less elegant, but sure to work.
-8. Setup `/etc/host` mappings on the local machine for each Raspberry Pi
+8. Setup `/etc/hosts` mappings on the local machine for each Raspberry Pi
    ```shell
    192.168.0.240 rpi-1
    ...
@@ -151,22 +151,24 @@ Now that we have our own load balancer implementation, we need to create a pool 
 ```shell
 kubectl apply -f examples/metallb.yaml
 ```
-This creates an address pool for the 15 addresses ranging from `192.168.0.240` to `192.168.0.255` 
+This creates an address pool for the 14 addresses ranging from `192.168.0.241` to `192.168.0.255`.
+
+Note that we also specify a node selector. This is important since in L2 mode, only one node is elected to announce the IP.
 
 ### Deploy Custom DNS
-Now that we have a load balancer implementation with an pool of available IP addresses to assign, we can deploy a custom DNS server on a fixed IP address. We can then configure the router to point to this IP as the primary DNS server (with Google/Cloudflare/etc. as a secondary), which means that we can create DNS records specific to the local network. First things first, we apply the below manifest which creates a `cytopia` deployment with one DNS record behind a load balancer with the external IP `192.168.0.240` assigned.
+Now that we have a load balancer implementation with an pool of available IP addresses to assign, we can deploy a custom DNS server on a fixed IP address. We can then configure the router to point to this IP as the primary DNS server (with Google/Cloudflare/etc. as a secondary), which means that we can create DNS records specific to the local network. First things first, we apply the below manifest which creates a `cytopia` deployment with one DNS record behind a load balancer with the external IP `192.168.0.241` assigned.
 ```shell
 kubectl apply -f examples/dns.yaml
 ```
 
-The next step involves logging into the control plane on your router, and changing the primary DNS server to `192.168.0.240` (be sure to add a secondary/backup). This means that the first place your router checks for resolving any DNS request is this `cytopia` deployment.
+The next step involves logging into the control plane on your router, and changing the primary DNS server to `192.168.0.241` (be sure to add a secondary/backup). This means that the first place your router checks for resolving any DNS request is this `cytopia` deployment.
 
-Note that the deployment includes one DNS record for `exammple.home.lab`, pointing to the IP address `192.168.0.241`. This means that any DNS lookup for `example.home.lab` should always resolve to this IP on your local network. You can validate this by running the below command on your local machine:
+Note that the deployment includes one DNS record for `exammple.home.lab`, pointing to the IP address `192.168.0.242`. This means that any DNS lookup for `example.home.lab` should always resolve to this IP on your local network. You can validate this by running the below command on your local machine:
 ```shell
 dig example.home.lab +vc +short
 ```
 
-To see this in action, apply the `nginx` deployment in the `examples` directory to create a simple `nginx` webserver behind a load balancer with the address `192.168.0.241`.
+To see this in action, apply the `nginx` deployment in the `examples` directory to create a simple `nginx` webserver behind a load balancer with the address `192.168.0.242`.
 ```shell
 kubectl apply -f examples/nginx.yaml
 ```
