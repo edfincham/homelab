@@ -17,12 +17,12 @@ spec:
         nameOverride: "dns"
         fullnameOverride: "dns"
         dnsRecords:
-        - domain: 192.168.0.242
+        - domain: 192.168.0.241
           address: "argo.home.lab"
-        - domain: 192.168.0.243
+        - domain: 192.168.0.242
           address: "dashboard.home.lab"
         service:
-          loadBalancerIP: 192.168.0.241
+          loadBalancerIP: 192.168.0.240
   destination:
     server: "https://kubernetes.default.svc"
     namespace: dns

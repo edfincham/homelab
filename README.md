@@ -82,12 +82,12 @@ After this, you should be able to connect to any Raspberry Pi without entering a
    ```
 2. Connect to the Raspberry Pi which will serve as the master node and execute:
    ```shell
-   curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --token $K3S_TOKEN --write-kubeconfig-mode 644 --bind-address $STATIC_IP --disable servicelb --disable traefik" sh -s -
+   curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --token $K3S_TOKEN --write-kubeconfig-mode 644 --bind-address $STATIC_IP --disable servicelb --disable traefik --kube-proxy-arg=ipvs-strict-arp=true" sh -s -
    ```
 
    Where `$STATIC_IP` is the IP previously configured for that device. The command itself installs K3s with a couple of flags passed. If you're working with an old Raspberry Pi as the single node in your K3s cluster, it can struggle to schedule everything. To alleviate this load, consider passing one or more [`--disable` flags](https://docs.k3s.io/installation/packaged-components?_highlight=disable#using-the---disable-flag).
 
-   If the installation fails, it may be necessary to add the following to the end of the `/boot/cmdline.txt` before rebooting:
+   If the installation fails, it may be necessary to add the following to the end of the `/boot/firmware/cmdline.txt` before rebooting:
    ```shell
    cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1
    ```
@@ -142,7 +142,7 @@ It may take a couple of runs of the playbook for it to successfully install. Onc
 ### Deploy Metallb
 Since we're doing this bare-metal, we need a load balancer implementation. For this, we can use `metallb`: 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.12/config/manifests/metallb-native.yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.5/config/manifests/metallb-native.yaml
 ```
 
 To understand how this all operates, we can use the manifests in the `examples` folder.
@@ -151,59 +151,9 @@ Now that we have our own load balancer implementation, we need to create a pool 
 ```shell
 kubectl apply -f examples/metallb.yaml
 ```
-This creates an address pool for the 14 addresses ranging from `192.168.0.241` to `192.168.0.255`.
+This creates an address pool for the 14 addresses ranging from `192.168.0.240` to `192.168.0.255`.
 
-Note that we also specify a node selector. This is important since in L2 mode, only one node is elected to announce the IP.
-
-### Deploy Custom DNS
-Now that we have a load balancer implementation with an pool of available IP addresses to assign, we can deploy a custom DNS server on a fixed IP address. We can then configure the router to point to this IP as the primary DNS server (with Google/Cloudflare/etc. as a secondary), which means that we can create DNS records specific to the local network. First things first, we apply the below manifest which creates a `cytopia` deployment with one DNS record behind a load balancer with the external IP `192.168.0.241` assigned.
-```shell
-kubectl apply -f examples/dns.yaml
-```
-
-The next step involves logging into the control plane on your router, and changing the primary DNS server to `192.168.0.241` (be sure to add a secondary/backup). This means that the first place your router checks for resolving any DNS request is this `cytopia` deployment.
-
-Note that the deployment includes one DNS record for `exammple.home.lab`, pointing to the IP address `192.168.0.242`. This means that any DNS lookup for `example.home.lab` should always resolve to this IP on your local network. You can validate this by running the below command on your local machine:
-```shell
-dig example.home.lab +vc +short
-```
-
-To see this in action, apply the `nginx` deployment in the `examples` directory to create a simple `nginx` webserver behind a load balancer with the address `192.168.0.242`.
-```shell
-kubectl apply -f examples/nginx.yaml
-```
-
-Once this has been deployed you should be able to open your web browser and navigate to `example.home.lab` and see the default `nginx` landing page. Note that we are on a unencrypted HTTP connection. We could install cert-manager and get TLS configured for secure HTTPS, but this will be problematic. Deploying TLS requires a certificate authority (CA) which can validate that we own the host, but we do not own the `example.home.lab` host. The alternative is to issue a self-signed certificate, but no device on the local network will recognise that without additional manual configuration.
-
-#### Custom DNS via Helm
-The manifest that we have applied (`examples.dns.yaml`) is, as the directory name implies, an example. We can make this a bit more configurable by packaging it into a Helm chart. This has the advantage of allowing us to specify our DNS records in a neater fashion. We can use the following field in the `values.yaml` file to template records into a config map which is then used by the main deployment as environment variables:
-For instance:
-```yaml
-dnsRecords:
-- domain: 192.168.0.0
-  address: "example.home.lab"
-```
-
-To begin with, we can see what resources the chart creates from our local machine with:
-```shell
-helm template --debug dns helm/charts/dns
-```
-Or:
-```shell
-helm upgrade --install dns helm/charts/dns --dry-run
-```
-
-We can then install the chart with:
-```shell
-helm upgrade --install dns helm/charts/dns
-```
-
-Finally, we can uninstall the Helm chart and all corresponding resources via:
-```shell
-helm uninstall dns
-```
-
-Installing a packaged Helm chart from our local machine is neat and all but, since this is a Git repository, we can do one better with GitOps.
+Note that that range starts at `192.168.0.240` which is the static lease for the master node. However, we can reuse this IP with a separate port to host a custom DNS server. It may not be necessary to share this IP, but that's the way I did it. Note also that we also specify a node selector in the `L2Advertisement` resource. This is important since in L2 mode, only one node is elected to announce the IP.
 
 ### Deploy ArgoCD
 [ArgoCD](https://argo-cd.readthedocs.io/en/stable/) is a GitOps tool for Kubernetes. The tool uses the contents of Git repositories as the source of truth for defining the desired application state. The state may be defined in a number of ways, ranging from Helm charts to directories of vanilla manifests.
@@ -231,5 +181,41 @@ echo $(kubectl get secret argocd-initial-admin-secret -n argocd -o json | jq -r 
 
 Once logged in, it's worth updating the password in the "User Info" settings panel.
 
-#### ArgoCD In Action
+### Deploy Custom DNS
+Now that we have a load balancer implementation with a pool of available IP addresses to assign, we can deploy a custom DNS server on a fixed IP address. We can then configure the router to point to this IP as the primary DNS server (with Google/Cloudflare/etc. as a secondary), which means that we can create DNS records specific to the local network.
 
+The DNS server of choice here is [cytopia](https://github.com/cytopia/docker-bind) which is nice and easy to use and configure. We've also created a small Helm chart which allows to use the `values.yaml` file to template records into a config map which is then used by the main deployment as environment variables:
+```yaml
+dnsRecords:
+- domain: 192.168.0.241
+  address: "argo.home.lab"
+```
+
+This is defined in the `argocd/dns.yaml` application, which means that we can use ArgoCD to manage the deployment of our DNS server. We simply run:
+```shell
+kubectl apply -f argocd/dns.yaml
+```
+
+And an ArgoCD application is created, which deploys the Helm chart with the DNS records that we specify in our application manifest. What's nice about this is that we can now visit `argo.home.lab` in our browser to view the ArgoCD control plane rather than having to remember `192.168.0.241`
+
+#### Debugging Custom DNS Record Resolution
+DNS can be fiddly. If a record is not resolving, use `dig` to check:
+```shell
+dig example.home.lab +vc +short
+```
+
+If that turns up empty, force `dig` to use the custom DNS IP:
+```shell
+dig @192.168.0.240 example.home.lab +vc +short
+```
+
+If this resolves to an IP address, then check if the system is using the custom DNS from the router:
+```shell
+resolvectl status
+```
+
+If the DNS Server IP is missing from the relevant interface (wlan0, eth0, etc.) thenadd it (along with a public DNS as backup):
+```shell
+sudo resolvectl dns wlp0s20f3 192.168.0.240 8.8.8.8
+resolvectl status
+```
