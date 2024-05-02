@@ -14,6 +14,8 @@ spec:
     helm:
       releaseName: dashboard
       valuesObject:
+        image:
+          tag: "3.0.1"
         dashboardConfig: |
           pageInfo:
             title: Home Lab

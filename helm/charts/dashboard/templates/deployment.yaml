@@ -30,7 +30,7 @@ spec:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: config-volume
-              mountPath: "/app/public"
+              mountPath: "/app/user-data"
       volumes:
         - name: config-volume
           configMap:
