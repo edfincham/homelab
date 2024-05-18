@@ -1,0 +1,27 @@
+image:
+  repository: edfincham/onkyo-rpi
+  pullPolicy: IfNotPresent
+  tag: ""
+
+nameOverride: "onkyo"
+fullnameOverride: "onkyo"
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  port: 8080
+  targetPort: 8080
+  type: LoadBalancer
+  loadBalancerIP: "192.168.0.243"
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
