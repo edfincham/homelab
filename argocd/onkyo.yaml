@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: onkyo
+  namespace: argocd
+spec:
+  project: default
+  syncPolicy:
+    automated: {}
+  source:
+    repoURL: https://github.com/edfincham/homelab.git
+    path: helm/charts/onkyo
+    targetRevision: HEAD
+    helm:
+      releaseName: onkyo
+      valuesObject:
+        image:
+          repository: edfincham/onkyo-rpi
+          pullPolicy: IfNotPresent
+          tag: "latest"
+        nameOverride: "onkyo"
+        fullnameOverride: "onkyo"
+        securityContext:
+          privileged: true
+        service:
+          port: 80
+          targetPort: 8080
+          type: LoadBalancer
+          loadBalancerIP: "192.168.0.243"
+        tolerations:
+        - key: device
+          operator: Equal
+          value: hifi
+          effect: NoSchedule
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: device
+                  operator: In
+                  values:
+                  - hifi
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: onkyo
