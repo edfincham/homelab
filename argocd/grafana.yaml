@@ -8,12 +8,27 @@ spec:
   source:
     chart: grafana
     repoURL: https://grafana.github.io/helm-charts
-    targetRevision: 8.5.0
+    targetRevision: 10.5.7
     helm:
       values: |
         service:
-          type: LoadBalancer
-          loadBalancerIP: "192.168.0.244"
+          type: ClusterIP
+
+        ingress:
+          enabled: true
+          hosts:
+            - "grafana.homeiswherethelabis.org"
+          ingressClassName: "traefik"
+          annotations:
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            cert-manager.io/cluster-issuer: cloudflare
+          tls:
+            - hosts:
+                - grafana.homeiswherethelabis.org
+              secretName: grafana-server-tls
+          path: /
+          pathType: Prefix
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
