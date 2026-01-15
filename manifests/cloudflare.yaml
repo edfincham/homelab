@@ -1,0 +1,48 @@
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  creationTimestamp: null
+  name: cloudflare
+  namespace: traefik
+spec:
+  encryptedData:
+    api-token: AgA8Z4HM1sNrElB+sZ4rOEBWldlG7tJHzA8sBaZeDZ94w1/wTE3TR1B1CvRVF+W1gPd3sz/vkeMArqGfxvcpuX6nHURnt3aU/kv3b8TBHloxuGWOpQw/wkH3UVgwMVc0jay05ymsYo5CboT8VZsvJawjpVbpfycCKZyGnLucxwVBsf30gsQeOKjXHk05yW+uKybZTCNUBMPGZ7nLrXLNL7laQcJwa3LhxU+ytWChDAWbk072oNN7/AYOC05l+bUWaqUNUXJ4/rjNTg6WZAU2NwVYai+yimppERruvtKhqTA/E1ZraZk42Uw4YmFT5FlDtTmLgarFWFcNaNIalMa4QbZ4zCPsIggLmy0ILnVQV49Bf54XAcFlXqBySPfsd+3epkAc2uB/HEIXJI9pqkXb7oMr147xoMWq7SBDwClxWO9YyI3fOOulCOAMBUyLO6jBk+juEo2A1WPAp5bGXeWybyhMj9CCZAaqBqVWDMhXSeOxgCit1zlufKWivKl7Lnh8b/2HsZtoek52DWYg6PvNc09GNPOeOBSRrn4awwQBNnLFbiLrRH/ZF950uwQY8QNg3oW2lOSs75zFvNAq/WOhHtcJiH+8NpGccf3yk8lo8kAJaBNEjaqTbS0TfjABEIbPoKmAeT4O4Cs6aVKuJFpPl02QwdNHxjwCuuiEW+2kHlgPFk0qPlKHUcoismjYMjS1NQdCGgMaOA+HM/pHVjvE5MJGAHl9fHNDL42KYoZPBmsvkbqd+Xnx3GEb
+  template:
+    metadata:
+      creationTimestamp: null
+      name: cloudflare
+      namespace: traefik
+    type: Opaque
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  creationTimestamp: null
+  name: cloudflare
+  namespace: cert-manager
+spec:
+  encryptedData:
+    api-token: AgCBB7GG0DvABjOtmS08oCP2zUYt9nkB8whEBnBkbwi2/GPVYZ5W7ZVTXGOsoDOXGeYvWa0aXD9pMcrV3LFJgY+EB5TLuEApIg9q2MjQyFhExMqVrrqD5H1wmg/rzmgVjsKJEY2lLr8oMeaj859uC9hT0y029BkBsQFckoWvjT5NIBvUf3Yg+0YvASuzPdpbClW5bcVtF5PUJtnrQ1yoJimICLFI4BovPQVvA2n1DN7qFUuMLKgWnnJiXMkCXHib78givsqy8BFC9Ay3SOFDU7HlwF2azSj2KhCbDLgbZm/6WDlo6lOjXAGfzwaydtMr1csG2dzq5q7L3okoY6WQOd9FcUMadOl/uxBBMsKdX9jq2uZih+lX2rwoN2YVRhgRTsBMBD6vScvaedS7njID6bkTmmC97ALLHKogmQtS9ptxiTZGF1qmIqaU0gzzeSesNUqrwBZewLLAE20a32GyydpoiSstzNkuOvyM9VWfqHlecWF+LWM19NhAnSMttcjhtxkRHg7vHIwr2njZ9QVCaqY26gWaMFenoEvRq3lgpbXOc2VimpQy2fB0EdFwIIW3MyP1V1ONEHep1z+Nm1urLcNuaJjFG0QH0TMnxs5NYm7wkRE/xdFbdUjZ6SiYFb7yL/l/UAnilA/3ipWX69nn5+M0RQrp0vQPZafoiuJySF7JyDm7cXtfCoEdgK6Nfd2UoiQ6UusPj3YvyTlNMl5sqpMwSkVR+hydz8OH5Hr6Jjo/FsputyRBd9dg
+  template:
+    metadata:
+      creationTimestamp: null
+      name: cloudflare
+      namespace: cert-manager
+    type: Opaque
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  creationTimestamp: null
+  name: cloudflare
+  namespace: external-dns
+spec:
+  encryptedData:
+    api-token: AgCMXRiYlhU/8dIf1vDQsTv5BpvPp5i2kaUkVALb7LSqvjtUXGmRByU6Om/ypm8CcmOophWDwkIOc8KSd3nN9KXpt59tI7UuP7BIJCLqpn1Sippnf67G2Dj1ZLd5n0f0ghVhdwrZLAl2Cv+PB+LZO8M8XFYC5rK4PrbR44/7SH42m7pqK/0dQCT7kAP47LSa9Lh/nzmo+BWq2sAaidcjoawe7qLa/RJmoktbxN8DyMfxZatwcSEymS/QNZIs98aEN8wuFDUbiLpoxERIAmyKgAB6YNq4xTVDQvy8oQv8o5rZqM7K/J7X3cEf1Bjtl4x09wjM82AYpSgBhBMKkHfiCqwVVdZrCByZmV+8kNLDqsD2rhGJp6kXCB4Pz1YWZXSooPmBAn2iLJ01EmljM8j+70/HxvOBBRNVqdKOhXc0RArZ+g6OBB4Gge2Hvxy4AheJZ5cIqCqYbhDDgn/4pkFANuQGg4FUf5Y36bOw4N3B8MB7eBmNJ4RcNZfwpAgJvN8FZZkcYyQ3MjLq5tN5+XPsBNVurOJ2ZhH/TDlakmVXfRpvlwVFTvlZ0XuiG2VgG3AXSmori9Tn2GM4bJprvHZF24tuQCybjV8TEluOSULZzaggJ3gWN4RY9CV9jGGtKzbgLiOKB+OuN4LSABS4h/juCW62fO5TECya7sG/bJ2JcSJkj7IGGUIj6U2AOR30caJ9YsSfuM30QjRu9Lmt2YHPFLmoSYdQwHZlAaMhuRv9TjqXoPcNHe/8UF5u
+  template:
+    metadata:
+      creationTimestamp: null
+      name: cloudflare
+      namespace: external-dns
+    type: Opaque

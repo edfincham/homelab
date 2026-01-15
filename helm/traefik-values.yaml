@@ -1,0 +1,58 @@
+image:
+  repository: traefik
+  tag: v3.3.3
+  pullPolicy: IfNotPresent
+
+globalArguments:
+  - "--global.sendanonymoususage=false"
+  - "--global.checknewversion=false"
+
+ports:
+  websecure:
+    tls:
+      enabled: true
+      certResolver: cloudflare
+  web:
+    redirections:
+      entryPoint:
+        to: websecure
+        scheme: https
+        permanent: true
+
+persistence:
+  enabled: false
+
+deployment:
+  enabled: true
+  replicas: 1
+
+service:
+  enabled: true
+  type: LoadBalancer
+  spec:
+    loadBalancerClass: tailscale
+
+certificatesResolvers:
+  cloudflare:
+    acme:
+      email: ed.fincham@proton.me
+      storage: /data/acme.json
+      caServer: https://acme-v02.api.letsencrypt.org/directory
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"
+
+env:
+  - name: CF_DNS_API_TOKEN
+    valueFrom:
+      secretKeyRef:
+        key: api-token
+        name: cloudflare
+
+logs:
+  general:
+    level: ERROR
+  access:
+    enabled: false

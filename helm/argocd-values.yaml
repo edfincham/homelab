@@ -2,8 +2,24 @@ configs:
   params:
     server.insecure: true
 
+global:
+  domain: "argo.homeiswherethelabis.org"
+
 server:
   service:
-    type: LoadBalancer
-    loadBalancerIP: 192.168.0.241
-    externalTrafficPolicy: Local
+    type: ClusterIP
+
+  ingress:
+    enabled: true
+    hostname: "argo.homeiswherethelabis.org"
+    ingressClassName: "traefik"
+    annotations:
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      cert-manager.io/cluster-issuer: cloudflare
+    tls:
+      - hosts:
+          - argo.homeiswherethelabis.org
+        secretName: argocd-server-tls
+    path: /
+    pathType: Prefix

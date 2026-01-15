@@ -1,107 +1,229 @@
 # Homelab
 
-## K3s Setup on Raspberry Pi(s)
+Documenting my homelab setup as I go.
 
-Using the `rpi-imager` tool:
-- Select `Raspberry Pi OS 64-bit`
-- Select the SD card as storage
-- Set the hostname as `rp-i` where `i` is the index
-- Enable password-based SSH for a user `pi`
-- Configure the wireless LAN (note that Raspberry Pis currently require 2.4GHz channels)
+This documents my setup for a Kubernetes cluster running on Raspberry Pi hardware behind a Tailscale VPN. It includes automated GitOps deployments, secure ingress routing, automatic TLS certificate management, and automatic DNS updates.
 
-Once written to the SD card, insert and boot the Raspberry Pi. It should boot and be assigned a dynamic IP address on the network. The router's admin console should list the connected devices and their associated IP addresses. With the IP address, you should be able to test the SSH connection by running `ssh pi@$IP` using the password set when imaging the SD card.
+## Table of Contents
+- [Architecture Overview](#architecture-overview)
+- [Prerequisites](#prerequisites)
+- [Hardware Setup](#hardware-setup)
+- [K3s Cluster Installation](#k3s-cluster-installation)
+- [Core Infrastructure Components](#core-infrastructure-components)
+- [GitOps with ArgoCD](#gitops-with-argocd)
+- [Troubleshooting](#troubleshooting)
 
-### Assign Static IP Addresses
-Login to the router's admin console and amend the DHCP range (which may be referred to as a Pool LAN). My range was `192.168.0.2` to `192.168.0.255`. To make space for some static IP addresses, adjust the end value. For instance, `192.168.0.240` provides 15 IP addresses for static assignment.
+## Architecture Overview
 
-To set the static addresses:
-1. SSH to the Raspberry Pi
-   ```shell
-   ssh pi@$IP
-   ```
-2. Install `vim`
-   ```shell
-   sudo apt-get install vim
-   ```
-3. Edit `/etc/dhcpcd.conf` (or create it if it does not exist)
-   ```shell
-   sudo vim /etc/dhcpcd.conf
-   ```
-4. Add/edit the section for static addresses and add
-   ```shell
-   interface eth0
-   static ip_address=192.168.0.240/24
-   static routers=192.168.0.1
-   static domain_name_servers=192.168.0.1
-   ```
+The infrastructure stack includes:
 
-   In this case, set `192.168.0.240` to the static IP which you intend to set for the Raspberry Pi. Also, set `192.168.0.1` to the router's IP
-5. Reboot the Raspberry Pi
-   ```shell
-   sudo reboot
-   ```
-6. After reboot, SSH to the static IP
-   ```shell
-   ssh pi@192.168.0.240
-   ```
-7. If this does not work, assign a static lease via the network router's admin console. Less elegant, but sure to work.
-8. Setup `/etc/hosts` mappings on the local machine for each Raspberry Pi
-   ```shell
-   192.168.0.240 rpi-1
-   ...
-   192.168.0.xxx rpi-n
-   ```
+- **K3s**: Lightweight Kubernetes distribution perfect for edge/IoT devices
+- **Tailscale**: Zero-config VPN for secure remote access to cluster resources
+- **Traefik**: Modern HTTP reverse proxy and load balancer for ingress routing
+- **cert-manager**: Automated TLS certificate management using Let's Encrypt
+- **ExternalDNS**: Automatic DNS record management in Cloudflare
+- **Sealed Secrets**: Encrypted secrets safe to store in Git repositories
+- **ArgoCD**: GitOps continuous delivery tool for Kubernetes
 
-### Setup Password-less SSH (Optional)
-This is just a quality of life option to prevent having to retype passwords when connecting to Raspberry Pis
+The cluster uses Tailscale for secure networking, Cloudflare for DNS management, and Let's Encrypt for automatic TLS certificate provisioning.
 
-1. Generate an SSH key on your local machine
-   ```shell
-   ssh-keygen
-   ```
-   Accept default options and don't enter a password. This will create a `~/.ssh/id_rsa` (private key) and `~/.ssh/id_rsa.pub` (public key)
-2. Copy the contents of `~/.ssh/id_rsa.pub`
-3. SSH to a Raspberry Pi and run:
-   ```shell
-   mkdir ~/.ssh
-   touch ~/.ssh/authorized_keys
-   chmod 0700 ~/.ssh
-   chmod 0600 ~/.ssh/authorized_keys
-   vim ~/.ssh/authorized_keys
-   ```
-   And paste the contents of the public key. Save the file
-4. Repeat this for each Raspberry Pi
+## Prerequisites
 
-After this, you should be able to connect to any Raspberry Pi without entering a password
+Before beginning, ensure you have the following tools installed on your local machine:
 
-### Install K3s
-1. Create a token which is used to add workers to the server:
-   ```shell
-   export K3S_TOKEN=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 20)
-   echo $K3S_TOKEN
-   ```
-2. Connect to the Raspberry Pi which will serve as the master node and execute:
-   ```shell
-   curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --token $K3S_TOKEN --write-kubeconfig-mode 644 --bind-address $STATIC_IP --disable servicelb --disable traefik --kube-proxy-arg=ipvs-strict-arp=true" sh -s -
-   ```
+### Required Tools
+- **Tailscale** - VPN client for secure cluster access
+  - Installation: https://tailscale.com/download
+  - Used for creating a secure mesh network between your devices and cluster nodes
 
-   Where `$STATIC_IP` is the IP previously configured for that device. The command itself installs K3s with a couple of flags passed. If you're working with an old Raspberry Pi as the single node in your K3s cluster, it can struggle to schedule everything. To alleviate this load, consider passing one or more [`--disable` flags](https://docs.k3s.io/installation/packaged-components?_highlight=disable#using-the---disable-flag).
+- **kubectl** - Kubernetes command-line tool
+  - Installation: https://kubernetes.io/docs/tasks/tools/
+  - Version compatibility: Match to your K3s version (typically v1.28+)
 
-   If the installation fails, it may be necessary to add the following to the end of the `/boot/firmware/cmdline.txt` before rebooting:
-   ```shell
-   cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1
-   ```
+- **kubeseal** - Client-side utility for Sealed Secrets
+  - Installation: https://github.com/bitnami-labs/sealed-secrets#kubeseal
+  - Used to encrypt secrets before committing to Git
 
-3. Connect to the Raspberry Pi(s) which will serve as worker or agent node(s) and execute:
-   ```shell
-   curl -sfL https://get.k3s.io | K3S_URL=https://$SERVER_IP:6443 K3S_TOKEN=$K3S_TOKEN sh -
-   ```
+- **Helm** - Kubernetes package manager
+  - Installation: https://helm.sh/docs/intro/install/
+  - Minimum version: 3.x
 
-   To retrieve the `K3S_TOKEN`, connect to the server node and run:
-   ```shell
-   sudo cat /var/lib/rancher/k3s/server/node-token
-   ```
-   The `K3S_TOKEN` is the last digits after the `:server:` string. The `$STATIC_IP` is the static IP configured for the master node.
+### Required Accounts
+- **Tailscale account** - For VPN mesh networking
+- **Cloudflare account** - For DNS management and API access
+- **Domain name** - Registered domain managed by e.g. Cloudflare DNS
+
+## Hardware Setup
+
+### Raspberry Pi Preparation
+
+This guide uses Raspberry Pi 4 Model B devices.
+
+I've used Raspberry Pi 4B devices with 8GB RAM as the nodes in the cluster. One node is desginated as the control plane (or "master") node while the others are the "worker" nodes.
+
+#### SD Card Imaging
+
+Install the **Raspberry Pi Imager**. Ensure you use version 2.x or later as newer versions of the RPi OS use Cloud Init rather than the legacy `firstrun.sh` to persist your configuration. It took me a long time to figure this out.
+
+1. **Select OS**: Choose `Raspberry Pi OS Lite 64-bit`
+2. **Select Storage**: Choose your SD card
+3. **Configure Settings** (click the gear icon):
+   - **Hostname**: Set as `rpi-0`, `rpi-1`, `rpi-2`, etc. (incrementing for each node)
+   - **Enable SSH**: Select "Use password authentication"
+   - **Username**: `pi`
+   - **Password**: Set a secure password
+   - **Configure Wireless LAN**:
+     - SSID: Your network name
+     - Password: Your WiFi password
+     - **Important**: Raspberry Pi 4 only supports 2.4GHz WiFi channels (not 5GHz)
+     - Ensure your router has a 2.4GHz network enabled
+4. **Write**: Flash the image to the SD card
+
+#### Initial Boot and Network Discovery
+
+1. Insert the SD card into your Raspberry Pi and power it on
+2. The Pi should automatically connect to your WiFi network and be assigned an IP address
+3. Locate the IP address using one of these methods:
+   - Check your router's admin console for connected devices
+   - Use `nmap` to scan your network: `nmap -sn 192.168.1.0/24`
+4. Test SSH connectivity: `ssh pi@<IP_ADDRESS>`
+
+### Tailscale Setup on Raspberry Pi Nodes
+
+Tailscale creates a secure mesh VPN network, allowing your cluster to be accessible from anywhere without exposing services directly to the internet. Each node needs Tailscale installed.
+
+On each Raspberry Pi node, run:
+
+```shell
+# Install Tailscale
+curl -fsSL https://tailscale.com/install.sh | sh
+
+# Start Tailscale and authenticate
+sudo tailscale up
+```
+
+The `tailscale up` command will output an authentication URL. Visit this URL in your browser to authorize the device in your Tailnet.
+
+#### Creating Tailscale Auth Keys
+
+For automated K3s setup, you'll need an auth key:
+
+1. Navigate to Tailscale Admin Console: **Settings** → **Personal Settings** → **Keys** → **Auth keys**
+2. Click **Generate auth key**
+3. Configure the key:
+   - Set an expiration time (or make it reusable)
+   - Optional: Enable "Reusable" for multiple node setup
+   - Optional: Tag the key with `tag:k3s` for organization
+4. Copy the generated key (it starts with `tskey-auth-`)
+
+This auth key will be used during K3s installation to automatically join nodes to your Tailnet.
+
+## K3s Cluster Installation
+
+K3s is a lightweight Kubernetes distribution built for IoT and edge computing. It's packaged as a single binary
+
+### Generate Cluster Token
+
+The K3s token is used to securely join worker nodes to the control plane. Generate a random secure token:
+
+```shell
+# Generate a random 20-character token
+export K3S_TOKEN=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 20)
+echo $K3S_TOKEN
+```
+
+**Important**: Save this token securely. You'll need it to join any additional worker nodes to the cluster.
+
+### Install K3s Control Plane (Master Node)
+
+SSH into the Raspberry Pi that will serve as your master node (typically `rpi-0`):
+
+```shell
+ssh pi@<MASTER_IP>
+```
+
+Then execute the following installation script:
+
+```shell
+export K3S_TOKEN=<YOUR_GENERATED_TOKEN>
+export KEY=<YOUR_TAILSCALE_AUTH_KEY>
+export TAILSCALE_IP=$(tailscale ip | head -n 1 | xargs)
+
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server \
+  --token $K3S_TOKEN \
+  --write-kubeconfig-mode 644 \
+  --vpn-auth=name=tailscale,joinKey=$KEY \
+  --node-external-ip=$TAILSCALE_IP \
+  --disable traefik" sh -s -
+```
+
+#### Installation Options Explained
+
+- `--token`: Authentication token for joining worker nodes
+- `--write-kubeconfig-mode 644`: Makes kubeconfig readable by all users (needed for copying)
+- `--vpn-auth`: Integrates K3s with Tailscale VPN
+- `--node-external-ip`: Uses Tailscale IP for node communication (enables remote access)
+- `--disable traefik`: Disables bundled Traefik (we'll install our own with custom config)
+
+#### Verify Installation
+
+Wait a few moments for K3s to start, then check the status:
+
+```shell
+systemctl status k3s
+
+# Check node status
+kubectl get nodes
+
+# You should see output like:
+# NAME     STATUS   ROLES                  AGE   VERSION
+# rpi-0    Ready    control-plane,master   1m    v1.28.x+k3s1
+```
+
+If the installation fails, it may be necessary to add the following to the end of the `/boot/firmware/cmdline.txt` before rebooting:
+```shell
+cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1
+```
+
+Or inspect the journalctl:
+```shell
+journalctl -xeu k3s.service
+```
+
+### Configure kubectl on Local Machine
+
+To manage your cluster from your local machine, you need to copy the kubeconfig file:
+```shell
+mkdir -p ~/.kube
+scp pi@<MASTER_IP>:/etc/rancher/k3s/k3s.yaml ~/.kube/config-rpi-k3s
+```
+
+#### Update Kubeconfig Server Address
+
+Now edit the copied config file. Specifically, change the `server` field from `https://127.0.0.1:6443` to your master node's Tailscale IP: `https://<MASTER_TAILSCALE_IP>:6443`. Use your editor of choice or just `sed`:
+
+```shell
+sed -i 's/127.0.0.1/<MASTER_TAILSCALE_IP>/g' ~/.kube/config-rpi-k3s
+```
+
+#### Install K3s on a Worker Node
+
+Once the node has connected to the Tailnet (see [Tailscale Setup](#tailscale-setup-on-raspberry-pi-nodes) section), connect to the server node and retrieve the `K3S_TOKEN`:
+```shell
+sudo cat /var/lib/rancher/k3s/server/node-token
+```
+
+The `K3S_TOKEN` is the last digits after the `:server:` string.
+
+You will also need the Tailscale IP of the server node:
+```shell
+tailscale ip | head -n 1 | xargs
+```
+
+Then connect to the worker node and execute:
+```shell
+curl -sfL https://get.k3s.io | K3S_URL=https://$TAILSCALE_IP:6443 K3S_TOKEN=$K3S_TOKEN sh -
+```
 
 #### Uninstall K3s
 To remove K3s from a server node, SSH to the Raspberry Pi and run:
@@ -114,53 +236,319 @@ To remove K3s from a worker/agent node, SSH to the Raspberry Pi and run:
 /usr/local/bin/k3s-agent-uninstall.sh
 ```
 
-### Configure Kubectl
-It may take a couple of runs of the playbook for it to successfully install. Once completed, `kubectl` can be configured on the local machine to connect to K3s
+## Core Infrastructure Components
 
-1. Transfer the `kubeconfig` from the master node to the local machine
-   ```shell
-   scp pi@rpi-1:/etc/rancher/k3s/k3s.yaml ~/.kube/config-rpi-k3s
-   ```
-2. In the `config-rpi-k3s` file, replace the value of the server field with the IP or name of your K3s server
-3. Configure the `KUBECONFIG` environment variable (add to `~/.bashrc`)
-   ```shell
-   export KUBECONFIG="/home/$USER/.kube/config"
-   export KUBECONFIG="$KUBECONFIG:/home/$USER/.kube/config-rpi-k3s"
-   ```
+### Create Namespaces
 
-   On my machine, the `KUBECONFIG` requires absolute paths rather than relative
-4. Use `kubectl` to check the available config contexts
-   ```shell
-   kubectl config get-contexts
-   ```
+Namespaces are a key Kubernetes construct for logical isolation and security boundaries. Normally I like to create namespaces as part of the Helm deployment but in this case we are created sealed secrets prior to any Helm deployment. Accordingly, we must first create the relevent namespaces to store these secrets.
 
-   Ensure the Raspberry Pi K3s context has a useful name. If not, change it with:
-   ```shell
-   kubectl config rename-context default rpi-k3s
-   ```
-
-### Deploy Metallb
-Since we're doing this bare-metal, we need a load balancer implementation. For this, we can use `metallb`: 
 ```shell
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.5/config/manifests/metallb-native.yaml
+kubectl apply -f manifests/namespaces.yaml
 ```
 
-To understand how this all operates, we can use the manifests in the `examples` folder.
+This creates namespaces for:
+- `traefik` - Ingress controller
+- `cert-manager` - Certificate management
+- `external-dns` - DNS automation
+- `tailscale` - VPN operator
 
-Now that we have our own load balancer implementation, we need to create a pool of IP addresses which can be assigned as needed. The pool isn't enough, however. We also need to be able to advertise the assignment of any IPs to the router. This is what the `L2Advertisement` achieves. 
+### Install Sealed Secrets
+
+Sealed Secrets allows you to encrypt Kubernetes secrets so they can be safely stored in Git repositories. The secrets are encrypted with a public key and can only be decrypted by the sealed-secrets controller running in your cluster. First, let's install the sealed-secrets operator with Helm:
+
 ```shell
-kubectl apply -f examples/metallb.yaml
+helm repo add sealed-secrets https://bitnami-labs.github.io/sealed-secrets
+helm repo update
+helm install \
+    sealed-secrets sealed-secrets/sealed-secrets \
+    --namespace kube-system \
+    --version 2.18.0 \
+    --set-string fullnameOverride=sealed-secrets-controller
 ```
-This creates an address pool for the 14 addresses ranging from `192.168.0.240` to `192.168.0.255`.
 
-Note that that range starts at `192.168.0.240` which is the static lease for the master node. However, we can reuse this IP with a separate port to host a custom DNS server. It may not be necessary to share this IP, but that's the way I did it. Note also that we also specify a node selector in the `L2Advertisement` resource. This is important since in L2 mode, only one node is elected to announce the IP.
+#### Verify Installation
 
-### Deploy ArgoCD
-[ArgoCD](https://argo-cd.readthedocs.io/en/stable/) is a GitOps tool for Kubernetes. The tool uses the contents of Git repositories as the source of truth for defining the desired application state. The state may be defined in a number of ways, ranging from Helm charts to directories of vanilla manifests.
+```shell
+kubectl get pods -n kube-system -l app.kubernetes.io/name=sealed-secrets
 
-ArgoCD automates the deployment of these states to a specified target environment. Once deployed, the ArgoCD controller continuously monitors running applications and compares the current, live state against the desired state as defined in the Git repository.
+# Should show a running pod:
+# NAME                                       READY   STATUS    RESTARTS   AGE
+# sealed-secrets-controller-xxxxxxxxx-xxxxx  1/1     Running   0          1m
+```
 
-To install ArgoCD via Helm:
+#### Using Sealed Secrets
+
+To encrypt a secret:
+
+1. Create a regular Kubernetes secret YAML file (don't commit this!)
+2. Use `kubeseal` to encrypt it:
+   ```shell
+   kubeseal -f secrets/my-secret.yaml -w manifests/my-sealed-secret.yaml
+   ```
+3. The resulting `my-sealed-secret.yaml` is safe to commit to Git
+4. Apply the sealed secret: `kubectl apply -f manifests/my-sealed-secret.yaml`
+5. The controller automatically decrypts it into a regular Kubernetes secret
+
+### Install Tailscale Operator
+
+The Tailscale Kubernetes operator allows cluster services to join your Tailnet, making them securely accessible without public ingress.
+
+#### Configure Tailscale ACLs
+
+1. Navigate to [Tailscale Admin Console](https://login.tailscale.com/admin)
+2. Go to **Access Controls** → **JSON Editor**
+3. Add the following to the `tagOwners` section:
+
+```json
+{
+  "tagOwners": {
+    "tag:k8s-operator": [],
+    "tag:k8s": ["tag:k8s-operator"]
+  }
+}
+```
+
+This allows the operator to create and manage tagged devices.
+
+#### Create OAuth Client
+
+1. Navigate to **Settings** → **Trust Credentials** → **+ Credential**
+2. Select **OAuth**
+3. Configure permissions:
+   - **Devices** → Read/Write
+   - **Keys** → Read/Write (for auth keys)
+4. Add tags: `tag:k8s-operator`
+5. Click **Generate** and save the **Client ID** and **Client Secret**
+
+#### Create Tailscale Secret
+
+Create a secret file `secrets/tailscale.yaml`:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: operator-oauth
+  namespace: tailscale
+type: Opaque
+stringData:
+  client_id: <YOUR_OAUTH_CLIENT_ID>
+  client_secret: <YOUR_OAUTH_CLIENT_SECRET>
+```
+
+Encrypt and apply the secret:
+
+```shell
+kubeseal -f secrets/tailscale.yaml -w manifests/tailscale.yaml
+kubectl apply -f manifests/tailscale.yaml
+```
+
+#### Install Tailscale Operator via Helm
+
+```shell
+helm repo add tailscale https://pkgs.tailscale.com/helmcharts
+helm repo update
+helm install \
+  tailscale tailscale/tailscale-operator \
+  --namespace tailscale \
+  --version 1.92.5
+```
+
+#### Verify Installation
+
+```shell
+kubectl get pods -n tailscale
+
+# Should show the operator running:
+# NAME                                  READY   STATUS    RESTARTS   AGE
+# tailscale-operator-xxxxxxxxxx-xxxxx   1/1     Running   0          1m
+```
+
+### Install cert-manager
+
+cert-manager automates the management and issuance of TLS certificates from various sources, including Let's Encrypt. It ensures certificates are valid and up-to-date, automatically renewing them before expiration.
+
+```shell
+helm install \
+  cert-manager oci://quay.io/jetstack/charts/cert-manager \
+  --version v1.19.2 \
+  --namespace cert-manager \
+  --set crds.enabled=true
+```
+
+The `--set crds.enabled=true` flag installs the Custom Resource Definitions (CRDs) needed for certificate management.
+
+#### Verify Installation
+
+```shell
+kubectl get pods -n cert-manager
+
+# Should show three running pods:
+# NAME                                       READY   STATUS    RESTARTS   AGE
+# cert-manager-xxxxxxxxxx-xxxxx              1/1     Running   0          1m
+# cert-manager-cainjector-xxxxxxxxxx-xxxxx   1/1     Running   0          1m
+# cert-manager-webhook-xxxxxxxxxx-xxxxx      1/1     Running   0          1m
+```
+
+### Create Cloudflare API Token Secret
+
+Multiple components need access to Cloudflare's API for DNS management:
+- **cert-manager**: For DNS-01 ACME challenges (proves domain ownership for wildcard certificates)
+- **external-dns**: For automatically creating/updating DNS records
+- **traefik**: For DNS-based certificate validation
+
+#### Create Cloudflare API Token
+
+1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Go to **My Profile** → **API Tokens** → **Create Token**
+3. Use the **Edit zone DNS** template or create a custom token with:
+   - **Permissions**:
+     - Zone → DNS → Edit
+     - Zone → Zone → Read
+   - **Zone Resources**:
+     - Include → All Zones (or specific zones you want to manage)
+4. Click **Continue to summary** → **Create Token**
+5. Copy the generated API token (it will only be shown once)
+
+#### Create and Seal the Secret
+
+Create a secret file `secrets/cloudflare.yaml` (don't commit this!):
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflare
+  namespace: cert-manager
+type: Opaque
+stringData:
+  api-token: <YOUR_CLOUDFLARE_API_TOKEN>
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflare
+  namespace: external-dns
+type: Opaque
+stringData:
+  api-token: <YOUR_CLOUDFLARE_API_TOKEN>
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cloudflare
+  namespace: traefik
+type: Opaque
+stringData:
+  api-token: <YOUR_CLOUDFLARE_API_TOKEN>
+```
+
+Encrypt and apply:
+
+```shell
+kubeseal -f secrets/cloudflare.yaml -w manifests/cloudflare.yaml
+kubectl apply -f manifests/cloudflare.yaml
+```
+
+### Create ClusterIssuer for Let's Encrypt
+
+A ClusterIssuer is a cert-manager resource that represents a certificate authority. This creates an issuer for Let's Encrypt using DNS-01 validation with Cloudflare. It does this by using the Cloudflare API token secret which we just created.
+
+```shell
+kubectl apply -f manifests/cluster-issuer.yaml
+```
+
+Your `cluster-issuer.yaml` should look similar to:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: cloudflare
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: your-email@example.com
+    privateKeySecretRef:
+      name: cert-manager-cloudflare
+    solvers:
+    - dns01:
+        cloudflare:
+          apiTokenSecretRef:
+            name: cloudflare
+            key: api-token
+```
+
+#### Verify ClusterIssuer
+
+```shell
+kubectl get clusterissuer
+
+# Should show:
+# NAME               READY   AGE
+# cloudflare         True    30s
+```
+
+### Install Traefik Ingress Controller
+
+Traefik is a modern HTTP reverse proxy and load balancer. While K3s includes Traefik, we disabled it during installation to use a custom configuration (principally, a .
+
+```shell
+helm repo add traefik https://traefik.github.io/charts
+helm repo update
+helm install \
+    traefik traefik/traefik \
+    --version v38.0.2 \
+    --namespace traefik \
+    --values helm/traefik-values.yaml
+```
+
+#### Verify Installation
+
+```shell
+kubectl get pods -n traefik
+
+# Should show Traefik pods running:
+# NAME                       READY   STATUS    RESTARTS   AGE
+# traefik-xxxxxxxxxx-xxxxx   1/1     Running   0          1m
+
+# Check service
+kubectl get svc -n traefik
+```
+
+### Install ExternalDNS
+
+ExternalDNS automatically creates and updates DNS records in Cloudflare based on Kubernetes Ingress and Service resources. This eliminates manual DNS management.
+
+```shell
+helm repo add external-dns https://kubernetes-sigs.github.io/external-dns/
+helm repo update
+helm install \
+    external-dns external-dns/external-dns \
+    --namespace external-dns \
+    --version 1.20.0 \
+    --values helm/externaldns-values.yaml
+```
+
+#### Verify Installation
+
+```shell
+kubectl get pods -n external-dns
+
+# Should show:
+# NAME                            READY   STATUS    RESTARTS   AGE
+# external-dns-xxxxxxxxxx-xxxxx   1/1     Running   0          1m
+
+# Check logs to verify Cloudflare connection
+kubectl logs -n external-dns -l app.kubernetes.io/name=external-dns
+```
+
+## GitOps with ArgoCD
+
+ArgoCD is a declarative, GitOps continuous delivery tool for Kubernetes. It monitors Git repositories and automatically syncs the desired application state to your cluster.
+
+### Install ArgoCD
+
 ```shell
 helm repo add argo https://argoproj.github.io/argo-helm
 helm repo update
@@ -168,54 +556,31 @@ helm install \
   argocd argo/argo-cd \
   --namespace argocd \
   --create-namespace \
-  --version 5.52.0 \
-  --values helm/argocd-values.yaml 
+  --version 9.3.0 \
+  --values helm/argocd-values.yaml
 ```
 
-Note that in the `argocd-values.yaml` we set the server to insecure. This is because on a local network deployment, managing TLS is problematic as we do not "own" the hosts we are using (instead, we are arbitrarily defining them in our custom DNS records). We also set the server's service as a `LoadBalancer` and assign the static IP we have in our custom DNS configuration.
+#### ArgoCD Configuration
 
-Next, we need to login. The initial password for the `admin` account is auto-generated and stored as clear text in the field `password` in a secret called `argocd-initial-admin-secret`:
+Key configurations in `helm/argocd-values.yaml`:
+
+- **Insecure mode**: Since this is a local deployment accessed via Tailscale, TLS termination happens at Traefik, and ArgoCD server runs in insecure mode
+- **Service type**: ClusterIP since we expose the UI via a Traefik Ingress
+- **Ingress configuration**: Add Traefik annotations
+
+### Access ArgoCD
+
+#### Retrieve Initial Admin Password & Update in UI
+
+The initial admin password is auto-generated and stored in a Kubernetes secret:
+
 ```shell
-echo $(kubectl get secret argocd-initial-admin-secret -n argocd -o json | jq -r '.data.password') | base64 -d
+kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d && echo
 ```
 
-Once logged in, it's worth updating the password in the "User Info" settings panel.
+After first login, update the admin password:
 
-### Deploy Custom DNS
-Now that we have a load balancer implementation with a pool of available IP addresses to assign, we can deploy a custom DNS server on a fixed IP address. We can then configure the router to point to this IP as the primary DNS server (with Google/Cloudflare/etc. as a secondary), which means that we can create DNS records specific to the local network.
-
-The DNS server of choice here is [cytopia](https://github.com/cytopia/docker-bind) which is nice and easy to use and configure. We've also created a small Helm chart which allows to use the `values.yaml` file to template records into a config map which is then used by the main deployment as environment variables:
-```yaml
-dnsRecords:
-- domain: 192.168.0.241
-  address: "argo.home.lab"
-```
-
-This is defined in the `argocd/dns.yaml` application, which means that we can use ArgoCD to manage the deployment of our DNS server. We simply run:
-```shell
-kubectl apply -f argocd/dns.yaml
-```
-
-And an ArgoCD application is created, which deploys the Helm chart with the DNS records that we specify in our application manifest. What's nice about this is that we can now visit `argo.home.lab` in our browser to view the ArgoCD control plane rather than having to remember `192.168.0.241`
-
-#### Debugging Custom DNS Record Resolution
-DNS can be fiddly. If a record is not resolving, use `dig` to check:
-```shell
-dig example.home.lab +vc +short
-```
-
-If that turns up empty, force `dig` to use the custom DNS IP:
-```shell
-dig @192.168.0.240 example.home.lab +vc +short
-```
-
-If this resolves to an IP address, then check if the system is using the custom DNS from the router:
-```shell
-resolvectl status
-```
-
-If the DNS Server IP is missing from the relevant interface (wlan0, eth0, etc.) thenadd it (along with a public DNS as backup):
-```shell
-sudo resolvectl dns wlp0s20f3 192.168.0.240 8.8.8.8
-resolvectl status
-```
+1. Click on **User Info** in the ArgoCD UI (top left, user icon)
+2. Click **Update Password**
+3. Enter the current password and your new password
+4. Save changes
