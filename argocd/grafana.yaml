@@ -29,6 +29,11 @@ spec:
               secretName: grafana-server-tls
           path: /
           pathType: Prefix
+
+        persistence:
+          type: pvc
+          enabled: true
+          size: 5Gi
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
