@@ -29,3 +29,11 @@ metadata:
     kubernetes.io/metadata.name: external-dns
     name: external-dns
   name: external-dns
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: owlet
+    name: owlet
+  name: owlet

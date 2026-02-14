@@ -220,9 +220,12 @@ You will also need the Tailscale IP of the server node:
 tailscale ip | head -n 1 | xargs
 ```
 
-Then connect to the worker node and execute:
+And the Tailscale Auth key from before. Then connect to the worker node and execute:
 ```shell
-curl -sfL https://get.k3s.io | K3S_URL=https://$TAILSCALE_IP:6443 K3S_TOKEN=$K3S_TOKEN sh -
+curl -sfL https://get.k3s.io | K3S_URL=https://$TAILSCALE_IP:6443 \
+    K3S_TOKEN=$K3S_TOKEN \
+    INSTALL_K3S_EXEC="--vpn-auth=name=tailscale,joinKey=$KEY \
+    --node-external-ip=$TAILSCALE_IP" sh -
 ```
 
 #### Uninstall K3s
@@ -251,6 +254,8 @@ This creates namespaces for:
 - `cert-manager` - Certificate management
 - `external-dns` - DNS automation
 - `tailscale` - VPN operator
+
+It may also create other namespaces for subsequent applications, but the above four are required for core deployments.
 
 ### Install Sealed Secrets
 
