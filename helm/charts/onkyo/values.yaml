@@ -13,10 +13,23 @@ podSecurityContext: {}
 securityContext: {}
 
 service:
+  enabled: true
+  type: LoadBalancer
   port: 8080
   targetPort: 8080
-  type: LoadBalancer
-  loadBalancerIP: "192.168.0.243"
+  nodePort: ""
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
 
 resources: {}
 
