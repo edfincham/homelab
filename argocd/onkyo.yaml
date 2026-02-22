@@ -23,10 +23,28 @@ spec:
         securityContext:
           privileged: true
         service:
+          enabled: true
           port: 80
           targetPort: 8080
-          type: LoadBalancer
-          loadBalancerIP: "192.168.0.243"
+          type: ClusterIP
+        ingress:
+          enabled: true
+          className: "traefik"
+          annotations:
+            traefik.ingress.kubernetes.io/router.tls: "true"
+            traefik.ingress.kubernetes.io/router.entrypoints: websecure
+            cert-manager.io/cluster-issuer: cloudflare
+          hosts:
+            - host: onkyo.homeiswherethelabis.org
+              paths:
+                - path: /
+                  pathType: Prefix
+          tls:
+            - hosts:
+                - onkyo.homeiswherethelabis.org
+              secretName: onkyo-server-tls
+
+
         tolerations:
         - key: device
           operator: Equal

@@ -37,3 +37,11 @@ metadata:
     kubernetes.io/metadata.name: owlet
     name: owlet
   name: owlet
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: onkyo
+    name: onkyo
+  name: onkyo
