@@ -215,17 +215,17 @@ sudo cat /var/lib/rancher/k3s/server/node-token
 
 The `K3S_TOKEN` is the last digits after the `:server:` string.
 
-You will also need the Tailscale IP of the server node:
+You will also need the Tailscale IP of both the server node __and__ the worker node:
 ```shell
 tailscale ip | head -n 1 | xargs
 ```
 
 And the Tailscale Auth key from before. Then connect to the worker node and execute:
 ```shell
-curl -sfL https://get.k3s.io | K3S_URL=https://$TAILSCALE_IP:6443 \
+curl -sfL https://get.k3s.io | K3S_URL=https://$TAILSCALE_SERVER_IP:6443 \
     K3S_TOKEN=$K3S_TOKEN \
     INSTALL_K3S_EXEC="--vpn-auth=name=tailscale,joinKey=$KEY \
-    --node-external-ip=$TAILSCALE_IP" sh -
+    --node-external-ip=$TAILSCALE_WORKER_IP" sh -
 ```
 
 #### Uninstall K3s
